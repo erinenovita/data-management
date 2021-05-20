@@ -1,0 +1,424 @@
+---
+title: "IB9HP Task 2"
+author: ''
+date: "12/11/2020"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Task 2
+
+We first create a RMD file which located in the same directory as the folder which contain all the *xlsx* files, which we named *group_assignment*. Since we are dealing with *xlsx*, we need to import packages *readxl* for reading the files.
+
+
+```{r}
+library(readxl)
+library(tidyr)
+```
+
+We then want to know their names inside the directory *group_assignment*.
+
+```{r}
+all_folder = list.files(path = "group_assignment/", all.files = F, full.names = F)
+head(all_folder)
+```
+Now we have all the directories now, we can now have a look how do the *xlsx* looks like, but first we want to know the *xlsx* file name in order we can open it. We take *Albania* for example:
+
+```{r, message=FALSE}
+
+XL_sheets = list.files(path = paste("group_assignment/","Albania" ,sep = ""), all.files = F, 
+                       full.names = F, pattern = ".xlsx")
+print(XL_sheets)
+```
+Using *list.files* and *pattern = ".xlsx"*, we obtain all the *xlsx* file names inside a directory. We now want to look at the structure of the *xlsx* files, and we will pick the first *xlsx* as an example:
+
+```{r, message=FALSE}
+current_XL = read_excel(paste("group_assignment/","Albania","/",XL_sheets[1] ,sep = ""))  
+#picking the first item from the vector XL_sheets, which is the name of the xlsx file
+```
+
+By checking *current_XL*, we observed the second column has no information that we wanted, and same for the first, third, sixth and the final 3 rows, we therefore remove them:
+
+```{r, message=FALSE}
+number_of_row = nrow(current_XL)    #we first find out how many rows are in total
+current_XL[,2] = NULL               #removing second column
+current_XL = current_XL[-c(1,3,6,number_of_row,number_of_row-1,number_of_row-2),]
+#removing unwanted rows
+#Although in this case we know the the actual number for the final 3 rows, but we are
+#removing them according to the number of rows in the xlsx file since different files might
+#have different number of years
+print(current_XL[1:4,1:6])
+```
+
+We can spot a few things:
+1. The type of flow are situated at first row, second column
+2. Country are situated at second row, second column
+3. The whole third row (apart from first column) are the product type
+4. Starting from fourth row, the first column are all the years
+
+We therefore want to check do this layout we found applied to all other *xlsx* files
+We also want to check does all data starts from 1971 and ends with 2013, and the orders of products are always the same through out all the *xlsx* files.
+
+Therefore we will start with a *for* loop:
+
+```{r, message=FALSE}
+st_col = c()
+all_flow = c()
+all_country = c()
+all_product_check = c()
+# creating the empty list for data collecting
+
+for (folder in all_folder)  #for all the directories in "group_assignment"
+{
+  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+                         all.files = F, full.names = F, pattern = ".xlsx")
+  #we create a new list each time we enters a new directory which contain all the xlsx files name
+  
+  for (XL in XL_sheets)     #for each xlsx file:
+  {
+    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = "")) 
+    #we open them under the name "current_XL
+    
+    current_XL[,2] = NULL
+    number_of_row = nrow(current_XL)
+    current_XL = current_XL[-c(1,3,6,number_of_row,number_of_row-1,number_of_row-2),]
+    #removing the unwanted rows and columns
+    
+    st_col = c(st_col,current_XL[,1])    #collect the first column from all the xlsx
+    
+    number_of_col = ncol(current_XL)   #number of columns in this xlsx
+    number_of_row = nrow(current_XL)   #number of rows in this xlsx 
+    
+    current_flow = as.character(current_XL[1,2])
+    # the type of flow from this xlsx
+    current_country = as.character(current_XL[2,2])
+    # the country from this xlsx
+    
+    all_flow = c(all_flow,current_flow)   #collect the type of flow from this xlsx
+    all_country = c(all_country, current_country)  #collect which country it was
+    
+    all_product_check = c(all_product_check,list(current_XL[3,2:number_of_col]))
+    #collect the order of the product that each xlsx listed
+  }
+}
+print(length(unique(st_col)))
+print(length(unique(all_country)))
+print(length(unique(all_flow)))
+print(length(unique(all_product_check)))
+
+```
+Manually checking *st_col* shows there are some *xlsx* files which have their starting year as 1971 while others have 1960, therefore we need to be extra careful when using the row numbers for collecting data.
+
+It also seems the country name are slightly different compared to the name of the directories, but the number of countries are as expected and the country name are at the expected location from out *xlsx*.
+
+There are 5 types of flow which are *Imports*, *Losses* ,*Production*, *Exports* and *Total primary energy supply*, the type of flow also are at the expected location from out *xlsx*.
+
+The line *unique(all_product_check)* only return a single list, therefore the order of the products through out all the *xlsx* are the same.
+
+Since for each country there are 5 types of flow which contain in 5 different *xlsx* files, we decided to create a csv for each country will contain all the record from the 5 flows.
+
+By examining other Excel files, we spotted that there are some occasions where for a particular year from a type of flow in a country, it has no value of records and only has *..* for that row, we decided to remove them since those rows carry no information.
+
+We also spotted that there are some *..* values inside a row which the row also contain other real values. We are going to change those to zero values.
+
+We now can therefore start collect the data.
+
+```{r, message=FALSE}
+
+for (folder in all_folder)  # for each directory:
+{
+  whole_data = data.frame() 
+  # we create a new data frame "whole_data"
+
+  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+                         all.files = F, full.names = F, pattern = ".xlsx")
+  # we collect all the xlsx file name,
+  
+  for (XL in XL_sheets) # and for each xlsx file:
+  {
+    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = "")) 
+    # we open it under "current_XL",
+    
+    current_XL[,2] = NULL
+    number_of_row = nrow(current_XL)
+    current_XL = current_XL[-c(1,3,6,number_of_row,number_of_row-1,number_of_row-2),]
+    # remove the rows and columns we don't want
+    
+    removing_rows = c()
+    # create a new list which will be recording the rows that has ".." for the whole
+    # row
+    
+    for (i in 4:nrow(current_XL))
+      # for each row which represents a year
+    {
+    element_from_row = unlist(unique(c(current_XL[i,-1])))
+      # obtain all unique values from that row
+      if (length(element_from_row) == 1)
+        # if we only obtain a single unique value from the row
+      {
+        if (element_from_row == "..")
+          # if the only unique value is ".."
+          # i.e. the whole row is ".."
+        {
+        removing_rows = c(removing_rows,i)
+        # we record the row number which the row is full of ".."
+        }
+      }
+    }
+    
+    if (length(removing_rows) != 0)
+      # if we record any rows that is full of ".."
+    {
+      current_XL = current_XL[-removing_rows,]
+      # we remove those row
+    }
+    
+    
+    number_of_col = ncol(current_XL)
+    number_of_row = nrow(current_XL)
+    # collect the number of rows and columns from this file (for later use)
+    
+    current_flow = c(rep(as.character(current_XL[1,2]),number_of_row - 3))
+    # collect which type of the five flows we are working with, and generate a vector that has a 
+    # length the number of row - 3, which is the number of year we have in the xlsx after we
+    # removed the unwanted rows
+    
+    
+    current_country = c(rep(as.character(current_XL[2,2]),number_of_row - 3))
+    # collect the country's name, and generate a similar vector as above
+    
+    all_product = as.character(current_XL[3,2:number_of_col])
+    # we collect all the product name and store them in a vector
+    
+    current_XL = cbind(current_country,current_flow,current_XL[-c(1,2,3),])
+    # recreate current_XL where the every row from the first column will have the same 
+    # country name. Similar for the second column which is the type of flow.
+    # We also remove the first 3 rows from the old current_XL since we obtain the
+    # country name, type of flow and the name of all the products and their order.
+    
+    colnames(current_XL) = c("Country","Flow","Year",all_product)
+    # We re-apply the the column names for current_XL, we the first 3 columns will be 'Country',
+    # 'Flow', 'Year', while the product names also applied to the corresponding columns.
+    
+    whole_data = rbind(whole_data,pivot_longer(current_XL, cols = all_product, 
+                                               values_to ='Value',names_to='Product'))
+    # We use pivot_longer() to create a long table data frame according to current_XL, 
+    # and combine this data frame to a larger data frame which contain all other data 
+    # points from the same country.
+
+  }
+  #We now have all the data points from a country under the data frame "whole_data":
+  
+  whole_data$Value = suppressWarnings(as.numeric(whole_data$Value))
+  whole_data$Year = as.numeric(whole_data$Year)
+  # We transfer all the values to numerical for years and the product values
+  # note that for the points which has ".." as value, we assign NA as their value
+  #  suppressWarnings() is to disable the warnings which tell us we are changing ".." to NA
+  
+  whole_data$Value[which(is.na(whole_data$Value))] = 0
+  # We transfer the NA values to 0
+  
+  whole_data = whole_data[,c(1,3,2,4,5)]
+  # Reordering the data frame columns to the form that we want
+  
+  write.csv(whole_data, file = paste("Data_by_country/",folder,".csv" ,sep = ""))
+  # And finally write all all the data to a csv file named by the country's name and store it under a  
+  # (new) directory called: Data_by_country
+}
+
+
+
+
+```
+
+We now have all the data points sorted in 38 different *csv* file, which each of them represents the corresponding country.
+
+But we also want the data points store in a single file, therefore we will combine all the *csv* file together:
+
+```{r, message = FALSE}
+all_data = c()  #we create a new empty variable "all_data" which it will be our data frame
+
+for (csv_file in all_folder) #for all the csv 
+  #(note we are using the names from the vector "all_folder" since the name of the csv are the same as 
+  # the name of the country directories) 
+  {
+   all_data = rbind(all_data,read.csv(paste("Data_by_country/",csv_file,".csv",sep = "")))
+   # we open the csv file, and combine it with other data from other csv file, 
+   # forming a larger data frame "all_data"
+}
+
+all_data$X = NULL
+# we removing the first column from this large data frame since it is just the index number
+
+write.csv(all_data, file = "All_country_data.csv")
+# and finally write this large data set to a csv file name "All_country_data.csv" which will appear
+# inside the same directory as the RMD file.
+
+head(all_data)
+
+```
+
+Now we have every data store inside one single data frame *all_data* and in the *csv* *All_country_data.csv* we are able to find how many records are there and the total number of records for each product across countries across years. (Assuming from all type of flow)
+
+
+```{r, message=FALSE, eval = FALSE}
+print(paste("There are",nrow(all_data),"records in total"))
+# counting the number of record (number of rows)
+
+for (i in all_product)
+{
+  print(paste(i,"has total of",length(which(all_data$Product == i)),"records"))
+}
+# the number of record for each type of product
+```
+
+We have in total of 510965 records and each product has 7861 records.
+
+Overall, the code for collecting the records are the following:
+
+```{r, message=FALSE,eval = FALSE}
+library(readxl)
+library(tidyr)
+all_folder = list.files(path = "group_assignment/", all.files = F, full.names = F)
+for (folder in all_folder)
+{
+  whole_data = data.frame()
+  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+                         all.files = F, full.names = F, pattern = ".xlsx")
+  for (XL in XL_sheets)
+  {
+    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = ""))
+    current_XL[,2] = NULL
+    number_of_row = nrow(current_XL)
+    current_XL = current_XL[-c(1,3,6,number_of_row,number_of_row-1,number_of_row-2),]
+     removing_rows = c()
+     for (i in 4:nrow(current_XL))
+       {
+       element_from_row = unlist(unique(c(current_XL[i,-1])))
+       if (length(element_from_row) == 1)
+         {
+         if (element_from_row == "..")
+           {
+           removing_rows = c(removing_rows,i)}
+       }
+     }
+     if (length(removing_rows) != 0)
+       {
+       current_XL = current_XL[-removing_rows,]
+       }
+    number_of_col = ncol(current_XL)
+    number_of_row = nrow(current_XL)
+    current_flow = c(rep(as.character(current_XL[1,2]),number_of_row - 3))
+    current_country = c(rep(as.character(current_XL[2,2]),number_of_row - 3))
+    all_product = as.character(current_XL[3,2:number_of_col])
+    current_XL = cbind(current_country,current_flow,current_XL[-c(1,2,3),])
+    colnames(current_XL) = c("Country","Flow","Year",all_product)
+    whole_data = rbind(whole_data,pivot_longer(current_XL, cols = all_product, 
+                                               values_to ='Value',names_to='Product'))
+  }
+  whole_data$Value = suppressWarnings(as.numeric(whole_data$Value))
+  whole_data$Year = as.numeric(whole_data$Year)
+  whole_data = whole_data[,c(1,3,2,4,5)]
+  write.csv(whole_data, file = paste("Data_by_country/",folder,".csv" ,sep = ""))
+}
+all_data = c()
+for (folder in all_folder)
+  {
+   all_data = rbind(all_data,read.csv(paste("Data_by_country/",folder,".csv",sep = "")))
+  }
+all_data$X = NULL
+write.csv(all_data, file = "All_country_data.csv")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r, message=FALSE, echo = FALSE, eval = FALSE}
+#Old version
+starting_time = proc.time()     #timer for recording the codes starts
+library(readxl)
+all_folder = list.files(path = "group_assignment/", all.files = F, full.names = F)
+for (folder in all_folder)
+{
+  whole_data = as.data.frame(matrix(c(NA,NA,NA,NA,NA),nrow = 1))
+colnames(whole_data) = c("current_country","current_year","current_flow",
+                         "all_product","current_year_value")
+  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+                         all.files = F, full.names = F, pattern = ".xlsx")
+  for (XL in XL_sheets)
+  {
+    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = ""))
+    current_XL[,2] = NULL
+    number_of_row = nrow(current_XL)
+    current_XL = current_XL[-c(1,3,6,number_of_row,number_of_row-1,number_of_row-2),]
+    number_of_col = ncol(current_XL)
+    number_of_row = nrow(current_XL)
+    current_flow = rep(as.character(current_XL[1,2]),number_of_col - 1)
+    current_country = rep(as.character(current_XL[2,2]),number_of_col - 1)
+    all_product = as.character(current_XL[3,2:number_of_col])
+    for (year in 4:number_of_row)
+    {
+      current_year = rep(as.numeric(current_XL[year,1]),number_of_col - 1)
+      current_year_value = suppressWarnings(as.numeric(current_XL[year,2:number_of_col]))
+      whole_data = rbind(whole_data,as.data.frame(
+        cbind(current_country,current_year,current_flow,all_product,current_year_value)))
+    }
+  }
+  whole_data = whole_data[-c(1),]
+  colnames(whole_data) = c("Country","Year","Flow","Product","Value")
+  write.csv(whole_data, file = paste("Data_by_country/",folder,".csv" ,sep = ""))
+}
+all_data = c()
+for (folder in all_folder)
+  {
+   all_data = rbind(all_data,read.csv(paste("Data_by_country/",folder,".csv",sep = "")))
+  }
+all_data$X = NULL
+write.csv(all_data, file = "All_country_data.csv")
+end_time = proc.time()          #timer for recording the codes ends
+print(end_time - starting_time) # time spent
+```

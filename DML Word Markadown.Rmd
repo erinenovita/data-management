@@ -1,0 +1,152 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+The Query below extracts the amount of a specific invoice. In order to access the invoice, the user must supply the Stay_ID as it is the main identifier for someone’s invoice. We would select the Guest ID, Stay ID and sum the total amount under the invoice cost. Note that the constraint “AmenitiesUsed_ID IS NOT NULL” is used here in order to extract only the expensed amount without adding the payments made. In order to extract the total amount paid it is enough to only change the constraing from “IS NOT NULL” to “IS NULL”. We have performed an inner join with the stay table in order to extract the Guest ID. We have also performed an inner join with the guest table in order to extract the name of the guest.
+
+```{SQL, EVAL = FALSE}
+SELECT Stay.Guest_ID, Guest.Guest_FirstName, Guest.Guest_LastName, Stay.Stay_ID, SUM(Invoice.Invoice_Cost) AS Total_Amount 
+FROM Invoice
+IINNER JOIN Stay
+ON Invoice.Stay_ID = Stay.Stay_ID
+INNER JOIN Guest
+ON Guest.Guest_ID = Stay.Guest_ID
+WHERE Stay_ID = ‘##’
+AND AmenitiesUsed_ID IS NOT NULL
+;
+```
+
+
+The following query would extract all invoice amounts of a certain customer and sorts them from biggest to smallest. The query extracts the Guest ID from the stay table, the total invoice amount from the invoice table and the name of the guest from the guest table. We have thus performed two inner joins. As with the queries above, constraint “Invoice.AmenitiesUsed_ID IS NOT NULL” is used in order to extract the invoice amount rather than the amount due or amount paid.
+
+```{SQL, EVAL = FALSE}
+SELECT Stay.Guest_ID, Guest.Guest_FirstName, Guest.Guest_LastName, SUM(Invoice.Invoice_Cost) AS Invoice_Amount
+FROM Invoice
+INNER JOIN Stay
+ON Stay.Stay_ID = Invoice.Stay_ID
+INNER JOIN Guest
+ON Guest.Guest_ID = Stay.Guest_ID
+WHERE Stay.Guest_ID = ‘##’
+AND  Invoice.AmenitiesUsed_ID IS NOT NULL
+GROUP BY Stay.Stay_ID
+ORDER BY Invoice.Invoice_Cost DESC
+;
+```
+
+In order to calculate the total amount due from a specific customer, it is enough to sum all the amounts in the invoice table. The query is very similar to the one above it only differs in the constraint on the AmenitiesUsed_ID. Since payments and expenses have different signs the total amount would be sorted automatically.
+
+```{SQL, EVAL = FALSE}
+SELECT Stay.Guest_ID, Guest.Guest_FirstName, Guest.Guest_LastName, SUM(Invoice.Invoice_Cost) AS Total_Due
+FROM Invoice
+INNER JOIN Stay
+ON Stay.Stay_ID = Invoice.Stay_ID
+INNER JOIN Guest
+ON Guest.Guest_ID = Stay.Guest_ID
+WHERE Stay.Guest_ID = ‘##’
+;
+```
+
+In the following query, we are extracting the highest paying customer of all time. We sum all Invoice_Cost from the Invoice table with a constraint on the Invoice,AmenitiesUsed_ID in order to only sum the payments without any expenses made. We then group the amount by Guest_ID and order by the total for each guest. Note that the ORDER BY is made by ascending order since the payments are stored as negative values. The LIMIT 1 would provide us with only the most valuable customer on account of invoiced amount. 
+
+```{SQL, EVAL = FALSE}
+SELECT Stay.Guest_ID, Guest.Guest_FirstName, Guest.Guest_LastName, SUM(-Invoice.Invoice_Cost) AS Total_Invoiced
+FROM Invoice
+INNER JOIN Stay
+ON Stay.Stay_ID = Invoice.Stay_ID
+INNER JOIN Guest
+ON Guest.Guest_ID = Stay.Guest_ID
+WHERE Invoice.AmenitiesUsed_ID IS NULL
+GROUP BY Stay.Guest_ID
+ORDER BY SUM(Invoice_Cost)
+LIMIT 1
+;
+```
+
+In order to extract the highest paying customer over a period, we used a similar query to the above. To the above query, we add a constraing on the time. In order to select highest paying customer ovver a period of a year, we specify the constraint on Stay.Stay_CheckInDate at 365 days (30 days for a month).
+
+```{SQL, EVAL = FALSE}
+SELECT Stay.Guest_ID, SUM(Invoice.Invoice_Cost) AS Total_Paid
+FROM Invoice
+INNER JOIN Stay
+ON Invoice.Guest_ID = Stay.Guest_ID
+WHERE AmenitiesUsed_ID IS NOT NULL
+AND (SELECT CAST(GETDATE() AS DATE) – Stay.Stay_CheckInDate <= 365
+GROUP BY Guest_ID
+ORDER BY SUM(Invoice_Cost) DESC
+LIMIT 1
+;
+```
+
+
+The following query extracts the best country based on the invoiced amounts. In order to perform this computation, we select the countries from the guest table and the sum of the invoice amounts from the Invoice table. We performed inner join with the Stay table in order to link the Guest and Invoice tables. when the group by country and order by the sum in descending order. We limit the output to 1 entry in order to extract the highest paying country.
+
+```{SQL, EVAL = FALSE}
+SELECT Guest.Country, SUM(Invoice.Invoice_Cost) As Total_Invoiced
+FROM Invoice
+INNER JOIN Stay
+ON Stay.Stay_ID = Invoice.Stay_ID
+INNER JOIN Guest
+ON Stay.Guest_ID = Guest.Guest_ID
+GROUP BY Guest.Country 
+ORDER BY SUM(Invoice.Invoice_Cost) DESC
+LIMIT 1
+;
+```
+
+We also scripted a query to extract the country from which we receive the highest number of countries. This query is very similar to the one above. Instead of summing the invoice amount we perform a count on the number of stays performed by people from a certain country. Another variation would be to calculate the number of customer rather than the number of stays.  
+
+```{SQL, EVAL = FALSE}
+SELECT Guest.Country, Count(Stay.Stay_ID) As  NumberOfStays
+FROM Guest
+INNER Join Stays
+ON Guest.Guest_ID = Stay.Guest_ID
+GROUP BY Country
+ORDER BY Count(Stay.Stay_ID)
+LIMIT 1
+;
+
+SELECT Country, COUNT(*) AS NumberOfGuests
+FROM Guest
+GROUP BY Country
+ORDER BY Count(*) DESC
+LIMIT 1
+;
+```
+
+In order to extract the amount to be paid by Channel, we select the Channel_NumberOfBookings_Monthly and multiply it by the fee.
+```{SQL, EVAL = FALSE}
+SELECT Channel_ID, Channel_Name, Channel_NumberOfBookings_Monthly*Channel_Fee AS Fee
+	FROM Channel
+	Group By Channel_ID
+;
+```
+
+
+Similarly, to evaluate the historical amount paid to a channel, we extract the count of stays by booking channel and then multiply it by the fee.
+
+```{SQL, EVAL = FALSE}
+SELECT Stay.Channel_ID, Channel.Channel_Name, COUNT(Stay_ID) AS Number_of_Bookings, COUNT(Stay_ID)*Channel.Channel_Fee AS Fee
+FROM Stay
+INNER JOIN Channel
+ON Channel.Channel_ID = Stay.Channel_ID
+GROUP BY Channel_ID
+;
+```
+
+In order to extract the utilization rate of each hotel, we select the hotel ID and hotel name form the Hotel table. we then compute the utilization rate by dividing the total number of stay days by the total possible billable day. In order to calculate the total billable days, we multiply the number of rooms by 365. We then group by hotel ID.
+
+```{SQL, EVAL = FALSE}
+SELECT Hotel.Hotel_ID, Hotel.Hotel_Name, (SUM(CAST(Stay.Stay_CheckOutDate AS INT)-CAST(Stay.Stay_CheckInDate AS INT)/Hotel.Hotel_NumberRooms*365)*100 AS Utilization_Rate
+FROM Stay
+INNER JOIN Hotel
+ON Hote.Hotel_ID = Stay.Hotel_ID
+GROUP BY Stay.Hotel_ID
+;
+```
+
+
+
+```
+
+

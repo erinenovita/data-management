@@ -1,0 +1,312 @@
+---
+title: "DM Task 3"
+author: ""
+date: "21/11/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#knitr::opts_chunk$set(eval = FALSE)
+```
+
+By checking the website:
+[https://www.food.gov.uk/uk-food-hygiene-rating-data-api](https://www.food.gov.uk/uk-food-hygiene-rating-data-api)
+
+It appears that the XML are not in this page, it seems like the xml file are in the link under "Get the data" section.
+
+\begin{figure}[!h]
+\includegraphics[width=1\textwidth]{image/Main_page.png}
+\caption{
+Main page
+}
+\end{figure}
+
+\newpage
+
+From the "Get the data" link, it seems for each area, they have their own XML file:
+
+\begin{figure}[!h]
+\includegraphics[width=1\textwidth]{image/Data_page_1.png}
+\caption{
+Data page
+}
+\end{figure}
+
+We first check the HTML "nodes" for each XML link:
+
+\begin{figure}[!h]
+\includegraphics[width=1\textwidth]{image/Data_page_2.png}
+\caption{
+HTML Data page
+}
+\end{figure}
+
+```{HTML, eval=FALSE}
+<a class="o-dataset-distribution--link" title="Aberdeen City" data-mime-type="application/xml"
+href="http://ratings.food.gov.uk/OpenDataFiles/FHRS760en-GB.xml">application/xml</a>
+```
+
+We can see that the the class *o-dataset-distribution--link* can direct us the obtain the link of the XML from *href*. In the same time, we can also obtain which area we are collecting the XML from *title*.
+
+We first load the packages we need:
+
+```{r, message=FALSE, eval=FALSE}
+library(rvest) 
+library(XML)   
+library(plyr)   
+library(rlist) 
+```
+
+We collect all the XML link and the corresponding area name:
+
+```{r}
+data_page = read_html('https://data.food.gov.uk/catalog/datasets/38dd8d6a-5ab1-4f50-b753-ab33288e3200')
+# We read the html from the xml data page
+
+data_link_section = html_nodes(data_page,".o-dataset-distribution--link")
+# Scraping sections of html from the class "o-dataset-distribution--link"
+
+data_link_file = as.data.frame(cbind(html_attr(data_link_section,"title"),
+                                     html_attr(data_link_section,"href")))
+# Create a data frame which store the area name from "title" under html, and the corresponding 
+# XML link from "href" under html.
+
+colnames(data_link_file) = c('location','link')
+# rename the column names to "location" and "link"
+
+head(data_link_file, n = 8)
+# Examine the data frame
+```
+
+It seems the first XML gives us nothing useful since it does not provide a *.xml* link, therefore we are going to remove it.
+
+We also spotted that there are some area (e.g. Angesey) has two sets of XML for different languages, therefore we need to filter the Welsh language XML out:
+
+```{r}
+data_link_file = data_link_file[-c(1,agrep("cy-GB.xml",data_link_file$link)),]
+# Removing the first xml and those that ends with "cy-GB.xml" since they are in Welsh.
+
+head(data_link_file, n = 8)
+# Examine the data frame
+```
+
+We now examine "Aberdeen City" to give us some sense how do the xml file structured:
+
+```{r, warning=FALSE}
+current_xml_in_list = xmlToList(xmlParse(read_xml(data_link_file$link[1])))
+# we first read the xml file, parses the XML, then transfer it to a list
+```
+
+\newpage
+
+Viewing the list:
+
+\begin{figure}[!h]
+\includegraphics[width=1\textwidth]{image/List_structured_1.png}
+\caption{
+HTML Data page
+}
+\end{figure}
+
+We can see the first item does not contain useful information for us, therefore we are going to remove them. We can also see under *EstablishmentCollection* are the data we want, but the length of the list for each record *EstablishmentDetail* are sometimes different.
+
+\newpage
+
+\begin{figure}[!h]
+\includegraphics[width=1\textwidth]{image/List_structured_2.png}
+\caption{
+HTML Data page
+}
+\end{figure}
+
+By looking at the records, we spotted the following:
+
+1. The record is not flat: there is a composite attribute *Geocode* which contain "Longitude" and "Latitude".
+
+2. *Scores* appears to be empty. It appears to be that since Aberdeen is an area from Scotland and they don't have the scoring system like in England and Wales. Therefore it is empty. When examine areas from England, the *Scores* is not empty and it is a composite attribute.
+
+3. Examining different records review the reasons of why the length for each record might be different: sometimes the record does not need all the address line (AddressLine 1 to 4), therefore they are some of them are absent.
+
+Therefore there are a few aims that we need to achieve:
+
+1. Flatten the records
+
+2. Remove attributes that are *NULL*
+
+3. When combining the record to a data frame, if a record does not have attributes that the others have, we need to create those attributes with *NA* value for that record.
+
+Hence we need the following function:
+
+1. *list.flatten()* from package *rlist* for flattening the records
+
+2. *compact()* from package *plyr* for remove attributes that are *NULL* for some records
+
+3. *rbind.fill()* from package *plyr* for creating *NA* values for records that do not have the corresponding information when combining to other records.
+
+```{r}
+current_xml_in_list = current_xml_in_list[[-1]]
+# Remove "Header" from list
+
+current_xml_in_list = sapply(current_xml_in_list,compact)
+# Remove NULL attributes for all records
+
+current_xml_in_list = sapply(current_xml_in_list,list.flatten)
+# Flattening all records
+
+location_data_frame = rbind.fill(sapply(current_xml_in_list,as.data.frame))
+# Combine all the records in to a data frame while filling NAs for those that 
+# do not have the corresponding information. 
+
+head(location_data_frame, n = 2)
+# Examine the data frame
+```
+
+It seems we are able to create a data frame which store all the records from Aberdeen and their information in a data frame, now we just need to do this for all other areas and write the data in to csv files.
+
+
+We first download all the *XML* file to a local machine:
+```{r, eval=FALSE}
+for (i in 1:nrow(data_link_file))
+  # for each area from data_link_file
+{
+   write_xml(read_xml(data_link_file$link[i]),paste0("XML file/",data_link_file$location[i],".xml"))
+  # Download the XML file to a folder called "XML file" locally
+}
+```
+
+Consider there are quite a lot of XML file, we decided to use parallel process with package *parallel*, we therefore first create a function with convert a *XML* to a csv file :
+
+```{r, eval=FALSE}
+data_to_csv = function(location)
+  # create a function which the input is the name of the location name, which we will obtain
+  # from the data frame "data_link_file"
+{
+  current_xml_in_list = xmlToList(xmlParse(read_xml(paste0("XML file/",location,".xml"))))%>%
+    # convert the xml file to a list
+    .[[-1]] %>% 
+    # remove the unwanted Header
+    sapply(.,compact) %>%
+    # remove all null information from all records
+    sapply(.,list.flatten)
+    # flatten all records
+  
+  current_xml_in_list = rbind.fill(sapply(current_xml_in_list,as.data.frame))
+  # store all records to a data frame, while filling NAs for corresponding sections.
+  
+  write.csv(current_xml_in_list ,paste0("Data_by_location/",location,".csv"))
+  # store the data frame as a csv file to the directory "Data_by_location" with their area name
+  # as the csv file name.
+}
+```
+
+We then create the *cluster* environment for parallel processing and run the function above:
+
+```{r, eval=FALSE}
+library(parallel)
+# load in package
+
+Clusters = makeCluster(detectCores())
+# create number of cluster according to number of CPU cores in local machine
+
+clusterEvalQ(Clusters, library(rvest))
+clusterEvalQ(Clusters, library(XML))
+clusterEvalQ(Clusters, library(plyr))
+clusterEvalQ(Clusters, library(rlist))
+# we load the same packages for each of the clusters
+
+start_time = proc.time()
+parLapply(Clusters, data_link_file$location, data_to_csv)
+end_time = proc.time()
+print(end_time - start_time)
+# We use all the clusters the perform the "data_to_csv" function
+
+stopCluster(Clusters)
+# After the computation we close all clusters
+```
+
+So we now have all the XML file converted to csv, but we want all the data from each area combined:
+
+```{r}
+all_data_frame = data.frame()
+# Create an empty data frame
+
+for (i in 1:nrow(data_link_file))
+  # For each area:
+{
+  all_data_frame = rbind.fill(all_data_frame,read.csv(paste('Data_by_location/',
+                                                            data_link_file$location[i],
+                                                            '.csv',sep = "")))
+  # Read the corresponding csv file, and combine it with other data from other areas.
+  # while filling NAs for corresponding sections if needed.
+}
+
+head(all_data_frame, n = 2)
+# Examine the data frame
+```
+
+We might want to remove the first column since it is just the index number.
+We also want to reorder the columns since "AddressLine1" should come before "AddressLine2"
+
+```{r}
+all_data_frame$X = NULL
+# Remove index column
+
+all_data_frame = all_data_frame[,c(1:5,21,6:20,22:25)]
+# Reorder the columns
+
+head(all_data_frame, n = 2)
+# Examine the data frame 
+```
+
+The columns are in order, we therefore saving data from all locations under a single csv file:
+
+```{r, eval=FALSE}
+write.csv(all_data_frame, file = 'All_location_data.csv')
+```
+
+The whole data collecting process are below:
+
+```{r, eval=FALSE}
+library(rvest) # read_html(), html_nodes(), html_attr(), read_xml()
+library(XML)   # xmlToList(), xmlParse()
+library(plyr)  # compact(), rbind.fill() 
+library(rlist) # list.flatten()
+data_page = read_html('https://data.food.gov.uk/catalog/datasets/38dd8d6a-5ab1-4f50-b753-ab33288e3200')
+data_link_section = html_nodes(data_page,".o-dataset-distribution--link")
+data_link_file = as.data.frame(cbind(html_attr(data_link_section,"title"),
+                                     html_attr(data_link_section,"href")))
+colnames(data_link_file) = c('location','link')
+data_link_file = data_link_file[-c(1,agrep("cy-GB.xml",data_link_file$link)),]
+for (i in 1:nrow(data_link_file))
+{
+   write_xml(read_xml(data_link_file$link[i]),paste0("XML file/",data_link_file$location[i],".xml"))
+}
+data_to_csv = function(location)
+{
+  current_xml_in_list = xmlToList(xmlParse(read_xml(paste0("XML file/",location,".xml"))))%>%
+    .[[-1]] %>% 
+    sapply(.,compact) %>%
+    sapply(.,list.flatten)
+  current_xml_in_list = rbind.fill(sapply(current_xml_in_list,as.data.frame))
+  write.csv(current_xml_in_list ,paste0("Data_by_location/",location,".csv"))
+}
+library(parallel)
+Clusters = makeCluster(detectCores())
+clusterEvalQ(Clusters, library(rvest))
+clusterEvalQ(Clusters, library(XML))
+clusterEvalQ(Clusters, library(plyr))
+clusterEvalQ(Clusters, library(rlist))
+parLapply(Clusters, data_link_file$location, data_to_csv)
+stopCluster(Clusters)
+all_data_frame = data.frame()
+for (i in 1:nrow(data_link_file))
+{
+  all_data_frame = rbind.fill(all_data_frame,read.csv(paste('Data_by_location/',
+                                                            data_link_file$location[i],
+                                                            '.csv',sep = "")))
+}
+all_data_frame$X = NULL
+all_data_frame = all_data_frame[,c(1:5,21,6:20,22:25)]
+write.csv(all_data_frame, file = 'All_location_data.csv')
+```
