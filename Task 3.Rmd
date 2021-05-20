@@ -1,7 +1,6 @@
 ---
-title: "DM Task 3"
+title: "Unstructured data"
 author: ""
-date: "21/11/2020"
 output: word_document
 ---
 
