@@ -1,5 +1,5 @@
 ---
-title: "IB9HP Task 2"
+title: "Semi-structured data"
 author: ''
 date: "12/11/2020"
 output:
@@ -11,9 +11,8 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-#Task 2
 
-We first create a RMD file which located in the same directory as the folder which contain all the *xlsx* files, which we named *group_assignment*. Since we are dealing with *xlsx*, we need to import packages *readxl* for reading the files.
+We first create a RMD file which located in the same directory as the folder which contain all the *xlsx* files, which we named *assignment*. Since we are dealing with *xlsx*, we need to import packages *readxl* for reading the files.
 
 
 ```{r}
@@ -21,24 +20,24 @@ library(readxl)
 library(tidyr)
 ```
 
-We then want to know their names inside the directory *group_assignment*.
+We then want to know their names inside the directory *assignment*.
 
 ```{r}
-all_folder = list.files(path = "group_assignment/", all.files = F, full.names = F)
+all_folder = list.files(path = "assignment/", all.files = F, full.names = F)
 head(all_folder)
 ```
 Now we have all the directories now, we can now have a look how do the *xlsx* looks like, but first we want to know the *xlsx* file name in order we can open it. We take *Albania* for example:
 
 ```{r, message=FALSE}
 
-XL_sheets = list.files(path = paste("group_assignment/","Albania" ,sep = ""), all.files = F, 
+XL_sheets = list.files(path = paste("assignment/","Albania" ,sep = ""), all.files = F, 
                        full.names = F, pattern = ".xlsx")
 print(XL_sheets)
 ```
 Using *list.files* and *pattern = ".xlsx"*, we obtain all the *xlsx* file names inside a directory. We now want to look at the structure of the *xlsx* files, and we will pick the first *xlsx* as an example:
 
 ```{r, message=FALSE}
-current_XL = read_excel(paste("group_assignment/","Albania","/",XL_sheets[1] ,sep = ""))  
+current_XL = read_excel(paste("assignment/","Albania","/",XL_sheets[1] ,sep = ""))  
 #picking the first item from the vector XL_sheets, which is the name of the xlsx file
 ```
 
@@ -73,15 +72,15 @@ all_country = c()
 all_product_check = c()
 # creating the empty list for data collecting
 
-for (folder in all_folder)  #for all the directories in "group_assignment"
+for (folder in all_folder)  #for all the directories in "assignment"
 {
-  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+  XL_sheets = list.files(path = paste("assignment/",folder ,sep = ""), 
                          all.files = F, full.names = F, pattern = ".xlsx")
   #we create a new list each time we enters a new directory which contain all the xlsx files name
   
   for (XL in XL_sheets)     #for each xlsx file:
   {
-    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = "")) 
+    current_XL = read_excel(paste("assignment/",folder,"/",XL ,sep = "")) 
     #we open them under the name "current_XL
     
     current_XL[,2] = NULL
@@ -135,13 +134,13 @@ for (folder in all_folder)  # for each directory:
   whole_data = data.frame() 
   # we create a new data frame "whole_data"
 
-  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+  XL_sheets = list.files(path = paste("assignment/",folder ,sep = ""), 
                          all.files = F, full.names = F, pattern = ".xlsx")
   # we collect all the xlsx file name,
   
   for (XL in XL_sheets) # and for each xlsx file:
   {
-    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = "")) 
+    current_XL = read_excel(paste("assignment/",folder,"/",XL ,sep = "")) 
     # we open it under "current_XL",
     
     current_XL[,2] = NULL
@@ -284,15 +283,15 @@ Overall, the code for collecting the records are the following:
 ```{r, message=FALSE,eval = FALSE}
 library(readxl)
 library(tidyr)
-all_folder = list.files(path = "group_assignment/", all.files = F, full.names = F)
+all_folder = list.files(path = "assignment/", all.files = F, full.names = F)
 for (folder in all_folder)
 {
   whole_data = data.frame()
-  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+  XL_sheets = list.files(path = paste("assignment/",folder ,sep = ""), 
                          all.files = F, full.names = F, pattern = ".xlsx")
   for (XL in XL_sheets)
   {
-    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = ""))
+    current_XL = read_excel(paste("assignment/",folder,"/",XL ,sep = ""))
     current_XL[,2] = NULL
     number_of_row = nrow(current_XL)
     current_XL = current_XL[-c(1,3,6,number_of_row,number_of_row-1,number_of_row-2),]
@@ -381,17 +380,17 @@ write.csv(all_data, file = "All_country_data.csv")
 #Old version
 starting_time = proc.time()     #timer for recording the codes starts
 library(readxl)
-all_folder = list.files(path = "group_assignment/", all.files = F, full.names = F)
+all_folder = list.files(path = "assignment/", all.files = F, full.names = F)
 for (folder in all_folder)
 {
   whole_data = as.data.frame(matrix(c(NA,NA,NA,NA,NA),nrow = 1))
 colnames(whole_data) = c("current_country","current_year","current_flow",
                          "all_product","current_year_value")
-  XL_sheets = list.files(path = paste("group_assignment/",folder ,sep = ""), 
+  XL_sheets = list.files(path = paste("assignment/",folder ,sep = ""), 
                          all.files = F, full.names = F, pattern = ".xlsx")
   for (XL in XL_sheets)
   {
-    current_XL = read_excel(paste("group_assignment/",folder,"/",XL ,sep = ""))
+    current_XL = read_excel(paste("assignment/",folder,"/",XL ,sep = ""))
     current_XL[,2] = NULL
     number_of_row = nrow(current_XL)
     current_XL = current_XL[-c(1,3,6,number_of_row,number_of_row-1,number_of_row-2),]
