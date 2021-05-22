@@ -1,4 +1,4 @@
-# literate-guacamole
+# data-management
 This project aims to translate business requirements into data management solutions. It will involve a complete process of extracting, refining and delivering datasets extracted from both structured databases and unstructured data sources. 
 
 From the structured datasets, we would explore the design of databases and exploit the data using SQL. This includes the principles of relational databases, relational mapping and getting into the right business understanding.
